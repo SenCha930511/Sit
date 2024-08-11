@@ -5,13 +5,17 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.api.ModInitializer;
 
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import one.oth3r.sit.file.Config;
 import one.oth3r.sit.packet.CustomPayloads;
 import org.slf4j.Logger;
@@ -44,6 +48,7 @@ public class Sit implements ModInitializer {
 			LOGGER.info(String.format("Received custom sitting settings from %s.",context.player().getName().getString()));
             playerSettings.put(context.player(),gson.fromJson(payload.value(),hashMapToken));
         })));
+
 	}
 
 	public static MutableText lang(String key, Object... args) {

@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.block.*;
 import net.minecraft.block.enums.BlockHalf;
@@ -11,12 +12,14 @@ import net.minecraft.block.enums.SlabType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.UseAction;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -90,7 +93,7 @@ public class Events {
         return block instanceof WallSignBlock || block instanceof TrapdoorBlock ||
                 block instanceof WallBannerBlock || block instanceof AirBlock;
     }
-    public static boolean checkBlocks(BlockPos pos, World world, boolean isAbove) {
+    public static boolean checkBlocks(BlockPos pos, World world, boolean isAbove, boolean isCommand) {
         BlockState blockState = world.getBlockState(pos);
         Block block = blockState.getBlock();
         // make sure the block above the chair is safe
@@ -104,7 +107,7 @@ public class Events {
         if (block instanceof StairsBlock && Config.stairsOn) return blockState.get(StairsBlock.HALF) == BlockHalf.BOTTOM;
         if (block instanceof SlabBlock && Config.slabsOn) return blockState.get(SlabBlock.TYPE) == SlabType.BOTTOM;
         if (block instanceof CarpetBlock && Config.carpetsOn) return true;
-        if (blockState.isFullCube(world,pos.add(0,1,0)) && Config.fullBlocksOn) return true;
+        if (blockState.isFullCube(world,pos.add(0,1,0)) && Config.fullBlocksOn && isCommand) return true;
         // custom checker
         if (Config.customOn && Config.customBlocks.size() != 0) {
             for (HashMap<String,Object> map:getCustomBlocks().values()) {
@@ -168,12 +171,12 @@ public class Events {
         if (entity.getY() <= pos.getY()+.35+oneTwentyTwo) entity.setPitch(90); // below
         else entity.setPitch(-90); // above
     }
-    public static boolean sit(ServerPlayerEntity player, BlockPos pos) {
+    public static boolean sit(ServerPlayerEntity player, BlockPos pos, boolean isCommand) {
         // todo interactions entity to make the sitting hitbox?
         World world = player.getWorld();
         DisplayEntity.TextDisplayEntity entity = new DisplayEntity.TextDisplayEntity(EntityType.TEXT_DISPLAY,player.getServerWorld());
         setEntity(pos,world,entity);
-        if (checkBlocks(pos,world,isAboveBlockheight(entity))) {
+        if (checkBlocks(pos,world,isAboveBlockheight(entity), isCommand)) {
             if (entities.containsKey(player)) {
                 if (!Config.sitWhileSeated) return false;
                 entities.get(player).setRemoved(Entity.RemovalReason.DISCARDED);
@@ -186,6 +189,7 @@ public class Events {
         }
         return false;
     }
+
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(minecraftServer -> minecraftServer.execute(Events::cleanUp));
         // PLAYER JOIN
@@ -219,9 +223,22 @@ public class Events {
                     // check the players hands
                     if (!checkLogic(player)) return ActionResult.PASS;
                     // make the player sit
-                    boolean status = sit(player,pos);
+                    boolean status = sit(player,pos, false);
                     // if sat, cancel / FAIL the use block event
                     if (status) return ActionResult.FAIL;
+                }
+                return ActionResult.PASS;
+            });
+            UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+                if(!world.isClient && hand == Hand.MAIN_HAND && entity instanceof PlayerEntity && player.getStackInHand(hand).isEmpty()) {
+                    ServerPlayerEntity passenger = (ServerPlayerEntity) entity;
+
+                    while (passenger.getFirstPassenger() != null && passenger.getFirstPassenger() != player)
+                        passenger = (ServerPlayerEntity) passenger.getFirstPassenger();
+
+                    player.startRiding(passenger);
+
+                    return ActionResult.SUCCESS;
                 }
                 return ActionResult.PASS;
             });

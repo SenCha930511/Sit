@@ -60,7 +60,7 @@ public class SitCommand {
             // if already sitting, ignore
             if (Events.entities.containsKey(player)) return 1;
             // sit
-            Events.sit(player,pos);
+            Events.sit(player,pos, true);
         }
         if (args[0].equalsIgnoreCase("reload")) {
             Config.load();
